@@ -1,0 +1,540 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:email="http://www.mulesoft.org/schema/mule/email" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:snowflake="http://www.mulesoft.org/schema/mule/snowflake" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd  http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd http://www.mulesoft.org/schema/mule/snowflake http://www.mulesoft.org/schema/mule/snowflake/current/mule-snowflake.xsd http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+    <http:listener-config name="account-creation-exp-api-httpListenerConfig">
+        <http:listener-connection host="0.0.0.0" port="8081" />
+    </http:listener-config>
+    <apikit:config name="account-creation-exp-api-config" api="resource::4a459fe4-de18-4d02-a11c-3104153d3fb2:account-creation-exp-api:1.0.3:raml:zip:account-creation-exp-api.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+    <snowflake:snowflake-config name="Snowflake_Config" doc:name="Snowflake Config" doc:id="4ebc2ce9-1ae4-4356-91bf-072d15be8321">
+        <snowflake:snowflake-connection accountName="BBUZYFR-WS95960" warehouse="COMPUTE_WH" database="APAR" schema="BFS" user="RPANDI" password="Srirama@54321$" role="ACCOUNTADMIN" />
+    </snowflake:snowflake-config>
+    <!-- <api-gateway:autodiscovery apiId="21194553" ignoreBasePath="true" doc:name="API Autodiscovery" doc:id="d392b4a7-04be-486d-8d42-08716044eca7" flowRef="account-creation-exp-api-main" />
+	 -->
+    <email:smtp-config name="Email_SMTP" doc:name="Email SMTP" doc:id="0e068a5a-abd7-4fd4-97b2-b2136f791aec">
+        <email:smtp-connection host="smtp.gmail.com" port="587" user="pandiramakrishna986@gmail.com" password="lpfcvnmbbdqejzwi">
+            <email:properties>
+                <email:property key="mail.smtp.starttls.enable" value="true" />
+            </email:properties>
+        </email:smtp-connection>
+    </email:smtp-config>
+	<os:object-store name="Object_store" doc:name="Object store" doc:id="ff5ae2c8-1fff-416b-b553-f1b1bb9d6ac0" />
+	<flow name="account-creation-exp-api-main">
+        <http:listener config-ref="account-creation-exp-api-httpListenerConfig" path="/api/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:router config-ref="account-creation-exp-api-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:BAD_REQUEST">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Bad request"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Method not allowed"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_ACCEPTABLE">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not acceptable"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">406</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Unsupported media type"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">415</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_IMPLEMENTED">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not Implemented"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">501</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="account-creation-exp-api-console">
+        <http:listener config-ref="account-creation-exp-api-httpListenerConfig" path="/console/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:console config-ref="account-creation-exp-api-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="post:\createAccount:application\json:account-creation-exp-api-config">
+        <logger level="INFO" doc:name="Logger" doc:id="962cf961-f20c-4cb2-86c2-36db9dca85aa" message="---create account flow started----------" />
+        <set-variable value="#[payload]" doc:name="Set Variable" doc:id="36822308-6e1c-48c7-a86c-097f045c69e0" variableName="originalPayload" />
+        <snowflake:select doc:name="Select" doc:id="071b991b-4f08-4e12-92d3-26cf5803e452" config-ref="Snowflake_Config">
+            <snowflake:sql><![CDATA[select * from customer where AADHAAR_NUMBER = :AADHAAR_NUMBER and PAN_NUMBER = :PAN_NUMBER and ACCOUNT_TYPE= :ACCOUNT_TYPE]]></snowflake:sql>
+            <snowflake:input-parameters><![CDATA[#[{
+	"ACCOUNT_TYPE": vars.originalPayload.accountType,
+	"PAN_NUMBER": vars.originalPayload.panNumber,
+	"AADHAAR_NUMBER": vars.originalPayload.aadhaarNumber
+}]]]></snowflake:input-parameters>
+        </snowflake:select>
+        <choice doc:name="Choice" doc:id="a708a9b5-c17a-47ee-8bc7-75a0303638be">
+            <when expression="#[isEmpty(payload)]">
+                <ee:transform doc:name="Transform Message" doc:id="f10dca21-7c66-45b6-a723-f64f1bf16caf">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "FIRST_NAME": vars.originalPayload.firstName,
+    "LAST_NAME": vars.originalPayload.lastName,
+    "DATE_OF_BIRTH": vars.originalPayload.dateOfBirth,
+    "MOBILE_NUMBER": vars.originalPayload.mobileNumber,
+    "EMAIL": vars.originalPayload.email,
+    "AADHAAR_NUMBER": vars.originalPayload.aadhaarNumber,
+    "PAN_NUMBER": vars.originalPayload.panNumber,
+    "ACCOUNT_TYPE": vars.originalPayload.accountType,
+    "INITIAL_DEPOSIT": vars.originalPayload.initialDeposit,
+    "ADDRESS": write(vars.originalPayload.address, "application/json"),
+    "ACCOUNT_NUMBER": "SB" ++ now() as String {format: "yyyyMMddHHmmss"}
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+                <snowflake:insert doc:id="b4789637-8300-402a-bbb6-b462a61bad86" config-ref="Snowflake_Config" target="insertPayload">
+                    <snowflake:sql><![CDATA[INSERT INTO CUSTOMER (
+    FIRST_NAME,
+    LAST_NAME,
+    DATE_OF_BIRTH,
+    MOBILE_NUMBER,
+    EMAIL,
+    AADHAAR_NUMBER,
+    PAN_NUMBER,
+    ACCOUNT_TYPE,
+    INITIAL_DEPOSIT,
+    ADDRESS,
+    ACCOUNT_NUMBER
+)
+SELECT
+    :FIRST_NAME,
+    :LAST_NAME,
+    TO_DATE(:DATE_OF_BIRTH),
+    :MOBILE_NUMBER,
+    :EMAIL,
+    :AADHAAR_NUMBER,
+    :PAN_NUMBER,
+    :ACCOUNT_TYPE,
+    :INITIAL_DEPOSIT,
+    TO_VARIANT(PARSE_JSON(:ADDRESS)),
+    :ACCOUNT_NUMBER;]]></snowflake:sql>
+                    <snowflake:parameter-types />
+                    <snowflake:input-parameters><![CDATA[#[payload]]]></snowflake:input-parameters>
+                    <snowflake:auto-generated-keys-column-indexes />
+                </snowflake:insert>
+                <logger level="INFO" doc:name="Logger" doc:id="71947d9f-750d-47d3-a3f3-4a84829f91d0" message="------customer details inserted--- ++ #[payload]" />
+                <choice doc:name="Choice" doc:id="d6569c96-c7ec-4da1-804e-96a21d75962c">
+                    <when expression="#[vars.insertPayload.affectedRows &gt; 0]">
+                        <!-- <ee:transform doc:name="Transform Message" doc:id="a0295d85-aeed-4d99-9ccc-5691849f339d">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+-&#45;&#45;
+payload ++ {
+	"Status": "Success"
+}
+
+]]></ee:set-payload>
+							</ee:message>
+						</ee:transform> -->
+                        <!-- <flow-ref doc:name="Flow Reference" doc:id="ea8a07e7-d519-41d6-bc1a-07a19a3baf68" name="put:\accountStatus:application\json:account-creation-exp-api-config"/>
+						 -->
+                        <ee:transform doc:name="Transform Message">
+                            <ee:message>
+                                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+ 
+  message: "Account created successfully",
+  "AccountNumber": payload.ACCOUNT_NUMBER
+}]]></ee:set-payload>
+                            </ee:message>
+                        </ee:transform>
+                        <email:send doc:name="Send" doc:id="4059a66b-2bff-4a1f-b959-88828419f3a3" config-ref="Email_SMTP" subject="Welcome to ICICI Bank" fromAddress="pandiramakrishna986@gmail.com">
+                            <email:to-addresses>
+                                <email:to-address value="navikante74@gmail.com" />
+                            </email:to-addresses>
+                            <email:reply-to-addresses>
+                                <email:reply-to-address value="navikante74@gmail.com" />
+                            </email:reply-to-addresses>
+                            <email:body contentType="text/plain" />
+                        </email:send>
+                    </when>
+                    <otherwise>
+                        <logger level="INFO" doc:name="Logger" doc:id="934fc5a6-4e62-41aa-887e-27096833f6b0" message="----Failed to insert into db-------" />
+                    </otherwise>
+                </choice>
+            </when>
+            <otherwise>
+                <ee:transform doc:name="Transform Message" doc:id="b630cc4a-65cf-4a3f-b68d-7b9ce05fa492">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message": "Account already eist with" ++ vars.originalPayload.aadhaarNumber }]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </otherwise>
+        </choice>
+    </flow>
+    <flow name="put:\accountStatus:application\json:account-creation-exp-api-config" doc:id="bdbaa46a-b052-497a-8f80-75ab6c3d1b16">
+        <snowflake:update doc:name="Update" doc:id="cc64f822-7db7-4023-8a52-aea2333611e3" config-ref="Snowflake_Config">
+            <snowflake:sql><![CDATA[UPDATE ACCOUNT
+SET STATUS = :status
+WHERE ACCOUNT_NUMBER = :accountNumber
+AND ACCOUNT_TYPE = :accountType;]]></snowflake:sql>
+            <snowflake:input-parameters><![CDATA[#[{
+	"accountNumber": payload.ACCOUNT_NUMBER,
+	"accountType": payload.ACCOUNT_TYPE,
+	"status": payload.Status
+}]]]></snowflake:input-parameters>
+        </snowflake:update>
+        <ee:transform doc:name="Transform Message">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  message: "Status updated successfully",
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="post:\depositAmount:application\json:account-creation-exp-api-config">
+        <logger level="INFO" doc:name="Logger" doc:id="4aa5027f-ab41-40a4-ad3f-3fdaf0fb55b0" message="----deposite flow started--- #[payload]" />
+        <set-variable value="#[payload]" doc:name="Set Variable" doc:id="1e79583b-d2ca-4b97-a156-e995aeb51212" variableName="originalPayload" />
+        <snowflake:select doc:name="Select" doc:id="09aba48a-4910-4f4d-9b13-8427725824c8" config-ref="Snowflake_Config">
+            <snowflake:sql><![CDATA[select * from ACCOUNT WHERE ACCOUNT_NUMBER = :accountNumber
+AND ACCOUNT_TYPE = :accountType]]></snowflake:sql>
+            <snowflake:input-parameters><![CDATA[#[{
+	"accountNumber": payload.accountNumber,
+	"accountType": payload.accountType
+	
+}]]]></snowflake:input-parameters>
+        </snowflake:select>
+        <choice doc:name="Choice" doc:id="4e35d596-e87f-4e3a-a2c1-6c0a896955ff">
+            <when expression="#[!isEmpty(payload) and payload.STATUS[0] ==&quot;Active&quot;]">
+                <ee:transform doc:name="Transform Message" doc:id="c6321d57-4606-49a1-8c0c-03c03b53b1ea">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+"totalbalance": vars.originalPayload.amount + payload.BALAN CE[0]
+
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+                <snowflake:update doc:name="Update" doc:id="736139db-a867-49cb-b67f-0bd34f626271" config-ref="Snowflake_Config" target="updatedAmount">
+                    <snowflake:sql><![CDATA[UPDATE ACCOUNT
+SET BALANCE = :BALANCE
+WHERE ACCOUNT_NUMBER = :accountNumber
+AND ACCOUNT_TYPE = :accountType;]]></snowflake:sql>
+                    <snowflake:input-parameters><![CDATA[#[{
+	"accountNumber": vars.originalPayload.accountNumber,
+	"accountType": vars.originalPayload.accountType,
+	"BALANCE": payload.totalbalance
+}]]]></snowflake:input-parameters>
+                </snowflake:update>
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "message":"amount successfully deposited, total balance is " ++ payload.totalbalance
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </when>
+            <when expression="#[!isEmpty(payload) and payload.STATUS[0] !=&quot;Active&quot;]">
+                <ee:transform doc:name="Transform Message" doc:id="0e8cf55c-98b4-47c5-a019-e9e4bb7da82b">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+"Account is in active"]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </when>
+            <otherwise>
+                <ee:transform doc:name="Transform Message" doc:id="73a39982-66d8-4e41-822d-f43c81f2bc53">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+"No account is avialable with this account number"]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+            </otherwise>
+        </choice>
+    </flow>
+    <flow name="get:\checkBalance:account-creation-exp-api-config">
+        <ee:transform doc:name="Transform Message - Input Variables" doc:id="5f812a9f-6329-4acb-88a6-2cf0fdea551b" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="accountNumber" ><![CDATA[attributes.queryParams.accountNumber]]></ee:set-variable>
+				<ee:set-variable variableName="accountType" ><![CDATA[attributes.queryParams.accountType]]></ee:set-variable>
+				<ee:set-variable variableName="pin" ><![CDATA[attributes.queryParams.pin]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<snowflake:select doc:name="Select" doc:id="6ce6e7af-c714-4835-b3e2-430843e8fcd5" config-ref="Snowflake_Config">
+			<snowflake:sql ><![CDATA[select * from ACCOUNT where ACCOUNT_NUMBER = :accountNumber and ACCOUNT_TYPE = :accountType]]></snowflake:sql>
+			<snowflake:input-parameters ><![CDATA[#[{
+	"accountNumber": vars.accountNumber,
+	"accountType": vars.accountType
+}]]]></snowflake:input-parameters>
+		</snowflake:select>
+		<choice doc:name="Choice" doc:id="dcb0d35d-749c-4e92-9c73-15b4c8032223" >
+			<when expression='#[!isEmpty(payload) and payload.STATUS[0] == "Active"]'>
+				<choice doc:name="Choice" doc:id="19f1272a-8472-462c-8e2b-90a7ec5d82ee" >
+					<when expression="#[payload.PIN[0] == vars.pin]">
+						<logger level="INFO" doc:name="Logger - PIN MATCHES" doc:id="81e6b463-fae8-41a7-86e0-4e5ab5e53800" message="pin is correct"/>
+						<ee:transform doc:name="Transform Message - Check Balance" doc:id="2e858daf-a982-4e8b-a8a4-1078d53a4248">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"Account Balance ": payload.BALANCE[0]
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</when>
+					<when expression="#[payload.PIN[0] != vars.pin]">
+						<logger level="INFO" doc:name="Logger - PIN Not Matched" doc:id="831af77e-efea-4c0f-ba7e-24ab97a4b071" message="PIN not matched"/>
+						<set-variable value="#[payload.WRONG_PIN_ATTEMPTS[0] + 1]" doc:name="Set Variable - Wrong Pin Attempts" doc:id="82fb43b6-cf40-4066-8cf7-b2d13ed2ea8f" variableName="wrongPinAttempts" />
+						<choice doc:name="Choice" doc:id="c5325e72-7625-4aac-b220-c13e11dafa3b" >
+							<when expression="#[vars.wrongPinAttempts &gt; 3]">
+								<logger level="INFO" doc:name="Logger - Ma attempts failed" doc:id="3dd580ad-3103-4eb7-966e-8226baf0976b" message="Ma attempts failed "/>
+								<snowflake:update doc:name="Update - Status " doc:id="8cafa685-b978-4c90-a62e-55a8ccbc29f9" config-ref="Snowflake_Config" >
+									<snowflake:sql ><![CDATA[UPDATE ACCOUNT
+SET WRONG_PIN_ATTEMPTS = :WRONG_PIN_ATTEMPTS,
+    STATUS = :STATUS
+WHERE ACCOUNT_NUMBER = :ACCOUNT_NUMBER
+  AND ACCOUNT_TYPE = :ACCOUNT_TYPE]]></snowflake:sql>
+									<snowflake:input-parameters ><![CDATA[#[{
+	ACCOUNT_NUMBER: vars.accountNumber,
+	ACCOUNT_TYPE: vars.accountType,
+	WRONG_PIN_ATTEMPTS: vars.wrongPinAttempts,
+	STATUS: "LoCKED"
+	
+}]]]></snowflake:input-parameters>
+								</snowflake:update>
+								<ee:transform doc:name="Transform Message" doc:id="3c6cd9c2-d53e-4dde-b6a1-b5b907038fb1" >
+									<ee:message >
+										<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message": "Ma reries attempted, your account has been locked. Please reach out customer care and nearest service center"
+}]]></ee:set-payload>
+									</ee:message>
+								</ee:transform>
+							</when>
+							<otherwise >
+								<logger level="INFO" doc:name="Logger - wrong PIN" doc:id="460f78fd-9eee-4aad-b99a-e938ed86e9f6" message="Wrong PIN"/>
+								<snowflake:update doc:name="Update - Wrong Pin Attempts" doc:id="2f2485cc-930f-42fb-9b04-95d6d975a27e" config-ref="Snowflake_Config">
+									<snowflake:sql><![CDATA[UPDATE ACCOUNT
+SET WRONG_PIN_ATTEMPTS = :WRONG_PIN_ATTEMPTS 
+WHERE ACCOUNT_NUMBER = :ACCOUNT_NUMBER and ACCOUNT_TYPE = :ACCOUNT_TYPE]]></snowflake:sql>
+									<snowflake:input-parameters><![CDATA[#[{
+	ACCOUNT_NUMBER: vars.accountNumber,
+	ACCOUNT_TYPE: vars.accountType,
+	WRONG_PIN_ATTEMPTS: vars.wrongPinAttempts
+	
+}]]]></snowflake:input-parameters>
+								</snowflake:update>
+								<ee:transform doc:name="Transform Message" doc:id="cd76943b-29b4-474b-8d57-bb78dab08d85">
+									<ee:message>
+										<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var maxAttempts = 3
+---
+{
+	"message": "Wrong ping ," ++ maxAttempts - vars.wrongPinAttempts ++ " left"
+}]]></ee:set-payload>
+									</ee:message>
+								</ee:transform>
+							</otherwise>
+						</choice>
+					</when>
+					<otherwise >
+						<logger level="INFO" doc:name="Logger" doc:id="8770acc1-b30c-4d73-a468-615c8c7fbd40" />
+					</otherwise>
+				</choice>
+			</when>
+			<when expression='#[!isEmpty(payload) and payload.STATUS[0] == "LoCKED"]'>
+				<choice doc:name="Choice" doc:id="4c4a017a-76e0-4e34-8c76-15912ff953c0" >
+					<when expression="#[payload.PIN[0] == vars.pin]">
+						<snowflake:update doc:name="Update" doc:id="6349e2be-0370-44dc-9bce-9d008ac1b676" config-ref="Snowflake_Config" target="updateStatus">
+							<snowflake:sql ><![CDATA[UPDATE ACCOUNT
+SET STATUS = :STATUS
+WHERE ACCOUNT_NUMBER = :ACCOUNT_NUMBER
+  AND ACCOUNT_TYPE = :ACCOUNT_TYPE]]></snowflake:sql>
+							<snowflake:input-parameters ><![CDATA[#[{
+	ACCOUNT_NUMBER: vars.accountNumber,
+	ACCOUNT_TYPE: vars.accountType,
+	WRONG_PIN_ATTEMPTS: vars.wrongPinAttempts,
+	STATUS: "Active"
+	
+}]]]></snowflake:input-parameters>
+						</snowflake:update>
+						<ee:transform doc:name="Transform Message" doc:id="fd0bf83f-51a0-4f8c-be7a-4c444e10046d" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"Account Balance ": payload.BALANCE[0]
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</when>
+					<otherwise >
+						<ee:transform doc:name="Transform Message" doc:id="2183f9b3-460c-421a-8138-735e1db43540">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message": "account is In active"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+					</otherwise>
+				</choice>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="01c1175d-0df3-472a-97df-af0a361cf0c6" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message": "Account number not available"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+    </flow>
+	<flow name="account-creation-exp-apiFlow--watermarking" doc:id="8aa9b67e-9410-4b4a-b7aa-5065cf22ec3a" >
+		<http:listener doc:name="Listener" doc:id="9ab584a8-f01d-4567-a758-8d180f2d4d0f" config-ref="account-creation-exp-api-httpListenerConfig" path="/watermark"/>
+		<logger level="INFO" doc:name="Logger" doc:id="d661c33a-b6bd-411f-996b-534527ebe94b" message="scdeuler flow started"/>
+		<os:retrieve doc:name="Retrieve" doc:id="bb4084e9-fabe-4ad6-9fb7-6755693cc3aa" key="getWaterMark" objectStore="Object_store" target="watermark">
+			<os:default-value><![CDATA[#["2025-07-25 03:47:28.805"]]]></os:default-value>
+		</os:retrieve>
+		<logger level="INFO" doc:name="Logger" doc:id="0e5f09a4-a063-48a6-81cd-981f378460f0" message="get watermark-----#[vars.watermark]"/>
+		<snowflake:select doc:name="Select" doc:id="8cc428f4-3186-42b9-bf9b-02904681275b" config-ref="Snowflake_Config">
+			<snowflake:sql ><![CDATA[select * from customer where created_at > :created_at]]></snowflake:sql>
+			<snowflake:input-parameters ><![CDATA[#[{
+	"created_at": vars.watermark
+}]]]></snowflake:input-parameters>
+		</snowflake:select>
+		<choice doc:name="Choice" doc:id="a3d9d3b5-ffe8-4992-af07-8a8f493b203c" >
+			<when expression="#[!isEmpty(payload)]">
+				<os:store doc:name="Store" doc:id="1f40930c-f5fa-4dc9-b19a-eccd281c0697" key="getWaterMark" objectStore="Object_store">
+			<os:value><![CDATA[#[%dw 2.0
+output application/json
+---
+max((payload orderBy $.CREATED_AT).CREATED_AT)]]]></os:value>
+		</os:store>
+				<logger level="INFO" doc:name="Logger" doc:id="56a278a9-f56c-4800-954d-181508ab183d" message="#[payload]" />
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="015618a2-c4aa-4425-8dd6-a7972055899e" message="No data available to process" />
+			</otherwise>
+		</choice>
+		<ee:transform doc:name="Transform Message" doc:id="a33bed9d-3b21-4e4c-9daf-3f5654007cd1" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>
