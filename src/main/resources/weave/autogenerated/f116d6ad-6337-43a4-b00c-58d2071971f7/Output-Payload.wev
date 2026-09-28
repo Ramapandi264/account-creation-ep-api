@@ -1,0 +1,8 @@
+%dw 2.0
+
+type auto_f116d6ad_6337_43a4_b00c_58d2071971f7_Output_Payload = {|
+  errordescription: String | Null, 
+  errorDate: DateTime, 
+  failingComponent: String | Null
+|}
+

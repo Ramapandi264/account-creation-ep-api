@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:snowflake="http://www.mulesoft.org/schema/mule/snowflake" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/snowflake http://www.mulesoft.org/schema/mule/snowflake/current/mule-snowflake.xsd">
+	<error-handler name="global-error-handlerError_Handler" doc:id="fe436398-2bfb-42ee-a64b-d5f74bcaf384" >
+		<on-error-propagate type="APIKIT:BAD_REQUEST">
+			<set-variable value="400" doc:name="Set Variable" doc:id="13928133-bca2-4aac-adbd-5b2b55851f18" variableName="httpStatus" />
+			<flow-ref doc:name="Flow Reference" doc:id="d15e180b-fa27-4784-b607-67f079eb328f" name="global-error-handlerSub_Flow" />
+
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+			<set-variable value="404" doc:name="Set Variable" doc:id="275df06e-d7fc-4418-a788-2825520d5156" variableName="httpStatus" />
+			<flow-ref doc:name="Flow Reference" doc:id="dba617c9-8bbb-43e8-892c-f86cb77e59a0" name="global-error-handlerSub_Flow" />
+
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+			<set-variable value="405" doc:name="Set Variable" doc:id="eef4dcfc-388e-4b8f-ba19-66c9934c8fd2" variableName="httpStatus" />
+			<flow-ref doc:name="Flow Reference" doc:id="552d882b-a924-42c3-a353-5622c6055f7d" name="global-error-handlerSub_Flow" />
+
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_ACCEPTABLE">
+			<set-variable value="501" doc:name="Set Variable" doc:id="db02ba2c-d943-477c-9993-fdf9b2477423" variableName="httpStatus" />
+			<flow-ref doc:name="Flow Reference" doc:id="68ed05bc-3f70-4d15-bfc9-7c6d22f742ce" name="global-error-handlerSub_Flow" />
+
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+			<set-variable value="415" doc:name="Set Variable" doc:id="67539d0a-a40c-448f-b109-f71ec30b8f77" variableName="httpStatus" />
+			<flow-ref doc:name="Flow Reference" doc:id="9d46cd50-c20e-4117-beaa-eca27c498ac8" name="global-error-handlerSub_Flow" />
+
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_IMPLEMENTED">
+			<set-variable value="500" doc:name="Set Variable" doc:id="b9503d54-2b1e-48fe-9291-ca41cb51bae6" variableName="httpStatus" />
+			<flow-ref doc:name="Flow Reference" doc:id="f4fdeeb5-d972-45a1-a88c-4dd73eac87c6" name="global-error-handlerSub_Flow" />
+
+            </on-error-propagate>
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="dd21cd48-ab95-4aac-ae6d-f5fdbeaec160" type="SNOWFLAKE:INVALID_INPUT">
+			<set-variable value="404" doc:name="Set Variable" doc:id="442eae2a-d39d-4352-8a5e-7db4aff39733" variableName="httpStatus" />
+			<flow-ref doc:name="Flow Reference" doc:id="7d18604a-f9b6-4a2a-9ccc-c186f9ff9325" name="global-error-handlerSub_Flow" />
+		</on-error-propagate>
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="62349387-8504-48b3-9f18-3dbaa1275b61" type="SNOWFLAKE:INVALID_CREDENTIALS">
+			<set-variable value="401" doc:name="Set Variable" doc:id="bd5a19cf-439d-4fad-b631-1fd92c19b7b6" variableName="httpStatus"/>
+			<flow-ref doc:name="Flow Reference" doc:id="293c6524-d59a-4b41-8116-d15064cc0570" name="global-error-handlerSub_Flow"/>
+		</on-error-propagate>
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="d135d52b-640a-462a-b0b8-531dc4678fb5" type="SNOWFLAKE:CONNECTIVITY">
+			<set-variable value="500" doc:name="Set Variable" doc:id="900968d9-ac11-424f-99c3-678f380493a2" variableName="httpStatus"/>
+		</on-error-propagate>
+	</error-handler>
+	<sub-flow name="global-error-handlerSub_Flow" doc:id="f116d6ad-6337-43a4-b00c-58d2071971f7" >
+		<ee:transform doc:name="Transform Message" doc:id="9f3bc12f-65f1-46a1-bb69-1e259fbafe2b" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+	"errordescription": error.description,
+	"errorDate": now() >> "IST",
+	"failingComponent": error.failingComponent
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="ERROR" doc:name="Logger" doc:id="94243f0e-21ed-4891-be1f-5227ea3e31e3" message="#[payload]"/>
+	</sub-flow>
+</mule>
