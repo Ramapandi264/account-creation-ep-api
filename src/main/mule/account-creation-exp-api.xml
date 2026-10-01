@@ -18,6 +18,9 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
         </email:smtp-connection>
     </email:smtp-config>
 	<os:object-store name="Object_store" doc:name="Object store" doc:id="ff5ae2c8-1fff-416b-b553-f1b1bb9d6ac0" />
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="b62ba3a4-32aa-41ae-a92e-2aebd93c89c3" >
+		<http:request-connection protocol="HTTPS" host="account-creation-sys-api-gzos9.5sc6y6-2.usa-e2.cloudhub.io"/>
+	</http:request-config>
 	<flow name="account-creation-exp-api-main">
         <http:listener config-ref="account-creation-exp-api-httpListenerConfig" path="/api/*">
             <http:response statusCode="#[vars.httpStatus default 200]">
@@ -61,69 +64,57 @@ output application/json
         </error-handler>
     </flow>
     <flow name="post:\createAccount:application\json:account-creation-exp-api-config">
-        <logger level="INFO" doc:name="Logger" doc:id="962cf961-f20c-4cb2-86c2-36db9dca85aa" message="---create account flow started----------" />
-        <set-variable value="#[payload]" doc:name="Set Variable" doc:id="36822308-6e1c-48c7-a86c-097f045c69e0" variableName="originalPayload" />
-        <snowflake:select doc:name="Select" doc:id="071b991b-4f08-4e12-92d3-26cf5803e452" config-ref="Snowflake_Config">
-            <snowflake:sql><![CDATA[select * from customer where AADHAAR_NUMBER = :AADHAAR_NUMBER and PAN_NUMBER = :PAN_NUMBER and ACCOUNT_TYPE= :ACCOUNT_TYPE]]></snowflake:sql>
-            <snowflake:input-parameters><![CDATA[#[{
-	"ACCOUNT_TYPE": vars.originalPayload.accountType,
-	"PAN_NUMBER": vars.originalPayload.panNumber,
-	"AADHAAR_NUMBER": vars.originalPayload.aadhaarNumber
-}]]]></snowflake:input-parameters>
-        </snowflake:select>
-        <choice doc:name="Choice" doc:id="a708a9b5-c17a-47ee-8bc7-75a0303638be">
+        <logger level="INFO" doc:name="Log - Start" doc:id="962cf961-f20c-4cb2-86c2-36db9dca85aa" message='#["account creation flow started"]' />
+        <set-variable value="#[payload]" doc:name="Set Variable - Original Payload" doc:id="36822308-6e1c-48c7-a86c-097f045c69e0" variableName="originalPayload" />
+        <http:request method="GET" doc:name="Invoke - Get Account Details" doc:id="3ab36bbe-3084-4828-a95a-63a33a3d6b15" config-ref="HTTP_Request_configuration" path="/api/accounts/{acountID}">
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"corelation-Id" : "abc"
+}]]]></http:headers>
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"acountID" : "vars.originalPayload.accountID"
+}]]]></http:uri-params>
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"accountType" : vars.originalPayload.accountType
+}]]]></http:query-params>
+		</http:request>
+		<choice doc:name="Check Account Eist" doc:id="a708a9b5-c17a-47ee-8bc7-75a0303638be">
             <when expression="#[isEmpty(payload)]">
-                <ee:transform doc:name="Transform Message" doc:id="f10dca21-7c66-45b6-a723-f64f1bf16caf">
+                <ee:transform doc:name="Transform Message - Request Payload" doc:id="f10dca21-7c66-45b6-a723-f64f1bf16caf">
                     <ee:message>
                         <ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
 {
-    "FIRST_NAME": vars.originalPayload.firstName,
-    "LAST_NAME": vars.originalPayload.lastName,
-    "DATE_OF_BIRTH": vars.originalPayload.dateOfBirth,
-    "MOBILE_NUMBER": vars.originalPayload.mobileNumber,
-    "EMAIL": vars.originalPayload.email,
-    "AADHAAR_NUMBER": vars.originalPayload.aadhaarNumber,
-    "PAN_NUMBER": vars.originalPayload.panNumber,
-    "ACCOUNT_TYPE": vars.originalPayload.accountType,
-    "INITIAL_DEPOSIT": vars.originalPayload.initialDeposit,
-    "ADDRESS": write(vars.originalPayload.address, "application/json"),
-    "ACCOUNT_NUMBER": "SB" ++ now() as String {format: "yyyyMMddHHmmss"}
+    "firstName": vars.originalPayload.firstName,
+    "lastName": vars.originalPayload.lastName,
+    "dateOfBirth": vars.originalPayload.dateOfBirth,
+    "mobileNumber": vars.originalPayload.mobileNumber,
+    "email": vars.originalPayload.email,
+    "aadhaarNumber": vars.originalPayload.aadhaarNumber,
+    "panNumber": vars.originalPayload.panNumber,
+    "accountType": vars.originalPayload.accountType,
+    "initialDeposit": vars.originalPayload.initialDeposit,
+    "address": vars.originalPayload.address,
+    "accountNumber": "SB" ++ now() as String {format: "yyyyMMddHHmmss"}
 }]]></ee:set-payload>
                     </ee:message>
                 </ee:transform>
-                <snowflake:insert doc:id="b4789637-8300-402a-bbb6-b462a61bad86" config-ref="Snowflake_Config" target="insertPayload">
-                    <snowflake:sql><![CDATA[INSERT INTO CUSTOMER (
-    FIRST_NAME,
-    LAST_NAME,
-    DATE_OF_BIRTH,
-    MOBILE_NUMBER,
-    EMAIL,
-    AADHAAR_NUMBER,
-    PAN_NUMBER,
-    ACCOUNT_TYPE,
-    INITIAL_DEPOSIT,
-    ADDRESS,
-    ACCOUNT_NUMBER
-)
-SELECT
-    :FIRST_NAME,
-    :LAST_NAME,
-    TO_DATE(:DATE_OF_BIRTH),
-    :MOBILE_NUMBER,
-    :EMAIL,
-    :AADHAAR_NUMBER,
-    :PAN_NUMBER,
-    :ACCOUNT_TYPE,
-    :INITIAL_DEPOSIT,
-    TO_VARIANT(PARSE_JSON(:ADDRESS)),
-    :ACCOUNT_NUMBER;]]></snowflake:sql>
-                    <snowflake:parameter-types />
-                    <snowflake:input-parameters><![CDATA[#[payload]]]></snowflake:input-parameters>
-                    <snowflake:auto-generated-keys-column-indexes />
-                </snowflake:insert>
-                <logger level="INFO" doc:name="Logger" doc:id="71947d9f-750d-47d3-a3f3-4a84829f91d0" message="------customer details inserted--- ++ #[payload]" />
+                <http:request method="POST" doc:name="Invoke - Save Account details" doc:id="e1b68acd-0120-41bf-af45-2a2670814efb" config-ref="HTTP_Request_configuration" target="insertPayload" path="/api/accounts">
+					<http:headers ><![CDATA[#[output application/java
+---
+{
+	"client_secret" : "test",
+	"corelation-Id" : "abc",
+	"client_id" : "123"
+}]]]></http:headers>
+				</http:request>
+                <logger level="INFO" doc:name="Log - Process API Response" doc:id="71947d9f-750d-47d3-a3f3-4a84829f91d0" message='"Response from Process Api" #[vars.insertPayload.affectedRows]' />
                 <choice doc:name="Choice" doc:id="d6569c96-c7ec-4da1-804e-96a21d75962c">
                     <when expression="#[vars.insertPayload.affectedRows &gt; 0]">
                         <!-- <ee:transform doc:name="Transform Message" doc:id="a0295d85-aeed-4d99-9ccc-5691849f339d">
@@ -140,7 +131,7 @@ payload ++ {
 						</ee:transform> -->
                         <!-- <flow-ref doc:name="Flow Reference" doc:id="ea8a07e7-d519-41d6-bc1a-07a19a3baf68" name="put:\accountStatus:application\json:account-creation-exp-api-config"/>
 						 -->
-                        <ee:transform doc:name="Transform Message">
+                        <ee:transform doc:name="Transform Message - Response">
                             <ee:message>
                                 <ee:set-payload><![CDATA[%dw 2.0
 output application/json
@@ -148,13 +139,13 @@ output application/json
 {
  
   message: "Account created successfully",
-  "AccountNumber": payload.ACCOUNT_NUMBER
+  "AccountNumber": payload.accountNumber
 }]]></ee:set-payload>
                             </ee:message>
                         </ee:transform>
-                        <email:send doc:name="Send" doc:id="4059a66b-2bff-4a1f-b959-88828419f3a3" config-ref="Email_SMTP" subject="Welcome to ICICI Bank" fromAddress="pandiramakrishna986@gmail.com">
+                        <email:send doc:name="Send - email" doc:id="4059a66b-2bff-4a1f-b959-88828419f3a3" config-ref="Email_SMTP" subject="Welcome to ICICI Bank" fromAddress="pandiramakrishna986@gmail.com">
                             <email:to-addresses>
-                                <email:to-address value="navikante74@gmail.com" />
+                                <email:to-address value="pandiramakrishna25@gmail.com" />
                             </email:to-addresses>
                             <email:reply-to-addresses>
                                 <email:reply-to-address value="navikante74@gmail.com" />
@@ -163,12 +154,12 @@ output application/json
                         </email:send>
                     </when>
                     <otherwise>
-                        <logger level="INFO" doc:name="Logger" doc:id="934fc5a6-4e62-41aa-887e-27096833f6b0" message="----Failed to insert into db-------" />
+                        <logger level="INFO" doc:name="Log - Failure" doc:id="934fc5a6-4e62-41aa-887e-27096833f6b0" message='#["Failed to save account details in snowflake"]' />
                     </otherwise>
                 </choice>
             </when>
-            <otherwise>
-                <ee:transform doc:name="Transform Message" doc:id="b630cc4a-65cf-4a3f-b68d-7b9ce05fa492">
+			<otherwise>
+                <ee:transform doc:name="Transform Message - Account Already Eist" doc:id="b630cc4a-65cf-4a3f-b68d-7b9ce05fa492">
                     <ee:message>
                         <ee:set-payload><![CDATA[%dw 2.0
 output application/json
@@ -179,6 +170,7 @@ output application/json
                 </ee:transform>
             </otherwise>
         </choice>
+		<logger level="INFO" doc:name="Log - End" doc:id="f3928095-f9dd-488c-b4dd-400727e68e6b" message='#["account creation flow Completed "]'/>
     </flow>
     <flow name="put:\accountStatus:application\json:account-creation-exp-api-config" doc:id="bdbaa46a-b052-497a-8f80-75ab6c3d1b16">
         <snowflake:update doc:name="Update" doc:id="cc64f822-7db7-4023-8a52-aea2333611e3" config-ref="Snowflake_Config">
